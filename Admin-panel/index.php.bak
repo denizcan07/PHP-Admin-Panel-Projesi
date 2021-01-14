@@ -1,0 +1,588 @@
+<!DOCTYPE 
+
+<head>
+	<meta http-equiv="Content-Type" content="text/html;charset=UTF-8" />
+	<title>PHP</title>
+	<link rel="stylesheet" href="style.css"/>
+	<link rel="stylesheet" href="styles.css">
+   <script src="http://code.jquery.com/jquery-latest.min.js" type="text/javascript"></script>
+   <script src="script.js"></script>
+</head>
+<body>
+	
+	<div id='cssmenu'>
+<ul>
+   <li class='active'><a href='index.php'><span>Anasayfa</span></a></li>
+   <li class='last'><a href='?islem=konu_ekle'><span>konu ekle</span></a></li>
+   <span style="float:right;"><li class='last'><a>PHP Admin Paneli Projesi</a></li></span>
+   <span style="float:right;"><li class='last'><a href='Hakkimda.php'><span >Hakkimda</span></a></li></span>
+   
+</ul>
+</div>
+<div class="ara">
+<form action="index.php?islem=ara" method="post">
+<input type="text" name="ara"/><button type="submit" >Ara</button>
+</form>
+</div>
+</body>
+</html>
+
+
+<?php 
+
+session_start();
+
+try{
+	
+	$db = new PDO("mysql:host=localhost;dbname=blog;charset=utf8","root","Deniz.07");
+	
+}catch(PDOException $mesaj){
+	
+	
+	echo $mesaj->getmessage();
+	
+}
+
+$islem = @$_GET["islem"];
+
+switch ($islem){
+	
+	case "ara":
+	
+	if($_POST){
+		
+		$ara = $_POST["ara"];
+		
+		if(!$ara){
+			echo "<div style='font-size:22px;color:green;position:relative; left:1050px;'>Lütfen boş bırakmayınız.</div>";			
+		}else{
+			$v = $db->prepare("select * from konular inner join kategoriler on kategoriler.kategori_id = konular.konu_kategori  where konu_baslik regexp ? and konu_durum=1 order by konu_id desc");
+		$v->execute(array($ara));
+		$x = $v->fetchAll(PDO::FETCH_ASSOC);
+		$xx = $v->rowCount();
+		if($xx){
+		echo "<div style='font-size:22px;color:green;position:relative; left:400px;'>aramanızla ilgili ".$xx." sonuc bulundu</div>";	
+		foreach($x as $m){
+			?>
+			 <div class="konu">
+		<h3><?php echo $m["konu_baslik"];?></h3>
+		<h4>kategori : <?php echo $m["kategori_adi"];?></h4>
+		<h5>ekleyen : <?php echo $m["konu_ekleyen"];?> <span>tarih : <?php echo $m["konu_tarih"];?></h5>
+		<p><?php echo substr($m["konu_aciklama"],0,200);?></p>
+		<div class="x"><a href="index.php?islem=devam&id=<?php echo $m["konu_id"];?>">devamı</a></div>
+	    </div>
+			<?php	
+		}
+		}else{
+			echo "<div style='font-size:22px;color:red;position:relative; left:400px;'>hiç sonuc bulunamadı</div>";
+		}	
+	}
+  }		
+	break;
+	case "devam":
+	$id =  @$_GET["id"];
+	 $v = $db->prepare("select * from konular where konu_id=?");
+	  $v->execute(array($id));
+	 $x =  $v->fetchAll(PDO::FETCH_ASSOC);
+	  $xx = $v->rowCount();
+	  if($xx){
+		  foreach($x as $m){
+			  ?>
+			  <div class="devam">
+				<h3><?php echo $m["konu_baslik"];?></h3>
+				<h5>ekleyen : <?php echo $m["konu_ekleyen"];?> <span>tarih : <?php echo $m["konu_tarih"];?></span></h5>
+				<p><?php echo nl2br($m["konu_aciklama"]);?></p>
+				</div>
+			  <?php	  
+		  }
+		  
+		 // konu hit baslangıc
+		 if(!@$_COOKIE["hit".$id]){
+		 $hit = $db->prepare("update konular set konu_hit= konu_hit +1 where konu_id=?");
+		 $hit->execute(array($id));
+		 
+		 setcookie("hit".$id,"_",time ()+9898989898);
+		 }
+		 // konu hit bitis
+		 
+		  // yorumları listele
+		  
+		  $c = $db->prepare("select * from yorumlar where yorum_konu_id=?");
+		  
+		  $c->execute(array($id));
+		  
+		  $x = $c->fetchAll();
+		  $xx = $c->rowCount();
+		  
+		  if($xx){
+			
+            echo "<div class='w'>bu konuya (".$xx.") yorum yazılmıs</div>";		
+			foreach($x as $b){
+							
+				?>
+				
+				<div class="yorum">
+				<h4> ekleyen : <?php echo $b["yorum_ekleyen"];?> <span>tarih :  <?php echo $b["yorum_tarih"];?></h4>
+				<p><?php echo $b["yorum_mesaj"];?></p>
+				</div>
+				
+				<?php
+				
+			}  			 			  
+		  }else{
+			  
+			echo "<div class='mesajiniz'>Bu konuya hic yorum yazılmamış, ilk yazan sen ol...</div>";  
+			  
+		  }		 		  
+		  // yorumları listele bitisi
+		  
+		  // yorumları ekleyelim
+		  if($_POST){
+			 
+              $isim	    = $_POST["isim"];		 
+              $eposta	= $_POST["eposta"];		 
+              $mesaj	= $_POST["mesaj"];		 
+              $konuid   = $_POST["konuid"];		 
+			  
+			  if(!$isim || !$eposta || !$mesaj){
+				  
+				  echo "gerekli alanları doldurmanız gerekiyor";
+				  
+			  }else{
+			  $c = $db->prepare("insert into yorumlar set 
+			  
+			                 yorum_ekleyen=?,
+							 yorum_eposta=?,
+			                 yorum_mesaj=?,
+                             yorum_konu_id=? 							 
+			  
+			  ");
+			  
+			 $x = $c->execute(array($isim,$eposta,$mesaj,$konuid));
+			 		 
+			 if($x){
+				 			 
+				 echo "<div class='mesajiniz'>mesajınız basarılı bir sekilde gonderilmistir yonlendiriliyorsunuz</div>";
+				 $url = $_SERVER['HTTP_REFERER'];  // hangi sayfadan gelindigi degerini verir.
+
+				 header ("refresh: 2; url=".$url."");
+				 
+			 }else{
+				 
+				 echo "Yorum gonderirken bir hata olustu";			 
+			 }		 
+			  }
+		  }else{
+			  
+			  if($_SESSION){
+				  
+				  ?>
+				  
+                 <div class="yorumlar">
+			  <h2>Yorum Yap.</h2>
+             <form action="" method="post">
+			 <table cellpadding="2" cellspacing="0">
+			 <tr>
+			 <td></td>
+			 <td><input type="hidden" value="<?php echo $_SESSION["uye"];?>" name="isim"/></td>
+			 </tr>
+			 <tr>
+			 <td></td>
+			 <td><input type="hidden" value="<?php echo $_SESSION["eposta"];?>" name="eposta"/></td>
+			 </tr>
+			 <tr>
+			 <td>mesaj</td>
+			 <td><textarea name="mesaj" id="" cols="50" rows="10"></textarea></td>
+			 </tr>
+			 <tr>
+			 <td></td>
+			 <td><input type="hidden" name="konuid" value="<?php echo $m["konu_id"];?>"/></td>
+			 </tr>
+			  <tr>
+			 <td></td>
+			 <td><button type="submit">mesaj gonder</button></td>
+			 </tr>
+			 </table>
+			 </form>
+			 </div>
+               <?php	
+					 
+			  }else{				  
+			 ?>
+			 <div class="yorumlar">
+			  <h2>Yorum Yap.</h2>
+             <form action="" method="post">
+			 <table cellpadding="5" cellspacing="5">
+			 <tr>
+			 <td>isim</td>
+			 <td><input type="text" name="isim"/></td>
+			 </tr>
+			 <tr>
+			 <td>eposta</td>
+			 <td><input type="text" name="eposta"/></td>
+			 </tr>
+			 <tr>
+			 <td>mesaj</td>
+			 <td><textarea name="mesaj" id="" cols="50" rows="10"></textarea></td>
+			 </tr>
+			 <tr>
+			 <td></td>
+			 <td><input type="hidden" name="konuid" value="<?php echo $m["konu_id"];?>"/></td>
+			 </tr>
+			  <tr>
+			 <td></td>
+			 <td><button type="submit">mesaj gonder</button></td>
+			 </tr>
+			 </table>
+			 </form>
+			 </div>
+			 
+             <?php			 
+			  }	  
+		  }
+		  // yorum ekleme bitisi
+		  	  
+	  }else{
+		  echo "boyle bir konu yok silinmis yada hiç var olmamıs olabilir";
+	  }
+	break;
+	
+	case "kategori":
+	$id = $_GET["id"];
+	
+	$v = $db->prepare("select * from konular inner join kategoriler on kategoriler.kategori_id = konular.konu_kategori where konu_kategori=? and konu_durum=1 order by konu_id desc");
+	$v->execute(array($id));
+	$c = $v->fetchAll(PDO::FETCH_ASSOC);
+	$x = $v->rowCount();
+	
+	$b = $db->prepare("select * from konular inner join kategoriler on kategoriler.kategori_id = konular.konu_kategori where konu_kategori=? and konu_durum=1");
+	$b->execute(array($id));
+	$z = $b->fetch(PDO::FETCH_ASSOC);
+	$n = $b->rowCount();
+	
+	?>
+	<div class="bul"> 
+	<span style="color:red;"><?php echo $z["kategori_adi"];?></span> kategorisine ait 
+	<span style="color:red;"><?php echo $n;?></span> tane sonuc bulundu
+	
+	</div>
+	<?php
+	if($x){
+		
+		foreach($c as $m){
+			
+			// konuya ait yorum sayısını bul
+		
+		$v = $db->prepare("select * from yorumlar where yorum_konu_id=?");
+		$v->execute(array($m["konu_id"]));
+		$zban = $v->rowCount();		
+			?>
+	    <div class="konu">
+		<h3><?php echo $m["konu_baslik"];?></h3>
+		<h4>kategori : <?php echo $m["kategori_adi"];?></h4>
+		<h5>ekleyen : <?php echo $m["konu_ekleyen"];?> yorum : (<?php echo $zban;?>) goruntulenme : <?php echo $m["konu_hit"];?><span>tarih : <?php echo $m["konu_tarih"];?></span></h5>
+		<p><?php echo substr($m["konu_aciklama"],0,200);?>....</p>
+		<div class="x"><a href="index.php?islem=devam&id=<?php echo $m["konu_id"];?>">devamı</a></div>
+	    </div>
+		<?php		
+		}	
+	}else {
+		
+		echo "bu kategoriye ait hiçbir konu bulunmuyor";
+		
+	}
+		
+	break;
+  
+   case "konu_ekle":
+     
+	 if($_SESSION){
+		 
+		 if($_POST){
+			 
+			 $baslik =   strip_tags($_POST["baslik"]);
+			 $kategori = $_POST["kategori"];
+			 $aciklama = strip_tags($_POST["aciklama"],'<img>');
+			 
+			 if(!$baslik || !$aciklama){
+
+              header("refresh: 2; url=index.php");
+			   echo "<div style='font-size:15px;color:red;position:relative; left:250px;'><h2 class=>Lutfen bos alan bırakmayınız. Ana Sayfaya Yönlendiriliyorsunuz.<h2></div>";          
+             
+			 }else {
+				 
+				 $v = $db->prepare("select * from konular where konu_baslik=?");
+				 $v->execute(array($baslik));
+				 $v->fetchAll(PDO::FETCH_ASSOC);
+				 $x = $v->rowCount();
+				 if($x){
+					 
+					echo "<h2 class='dikkat'>".$baslik." adlı konu daha once eklenmis lutfen baska bir tane deneyin</h2>";
+					 
+				 }else {
+				 $insert = $db->prepare("insert into konular set  
+				             
+							 konu_baslik=?,
+							 konu_kategori=?,
+							 konu_aciklama=?,
+							 konu_ekleyen=?			 
+				 
+				 ");
+				
+               $kayit =  $insert->execute(array($baslik,$kategori,$aciklama,$_SESSION["uye"]));				
+				 				 
+				 if($kayit){
+					 
+					 echo "<h2 style='color:green;'>konu basarıyla eklendi onaylandıktan sonra sitede yayınlanacaktır yonlendiriliyorsunuz...</h2>";
+					 
+					 header("refresh: 2; url=index.php");
+				 }else {
+					 
+					 echo "<h2 class='dikkat'>Konu eklenirken bir hata olustu/h2>";
+					 
+				 }		 
+				 
+			 }
+			 
+			 }
+		 }else {
+			 
+			 $v = $db->prepare("select * from kategoriler");
+			 $v->execute(array());
+			 $c = $v->fetchAll(PDO::FETCH_ASSOC);
+			 
+			?>
+
+           <div class="konu_ekle"> 
+		   <form action="" method="post">
+		   <center><h2>Konu Ekle</h2></center>
+		   <ul> 
+		   <li>Konu Basligi</li>
+		   <li><input type="text" name="baslik" /></li>
+		   <li>Konu Türü</li>
+		   <li>
+		   <select name="kategori" id="">
+		   <?php 
+		   
+		   foreach($c as $m){
+			   
+			   echo '<option value="'.$m["kategori_id"].'">'.$m["kategori_adi"].'</option>';
+			   
+		   }
+		   
+		   ?>
+		   
+		   </select>
+		   
+		   </li>
+		   <li>Konu Aciklamasi</li>
+		   <li><textarea name="aciklama" id="" cols="40" rows="5"></textarea></li>
+		   <li><button type="submit">Gonder</button></li>
+		   </ul>
+		   </form>
+		   </div>
+		   
+             <?php						 
+		 }
+		 		 
+	 }else {
+		 
+		 echo "<h2 class='dikkat'>Üye olmadan konu ekleyemessiniz.</h2>";
+		 exit;
+	 }
+	
+	break;
+
+	default:
+	if($_SESSION){
+		?>
+		<div class="uyelik">
+	<h2>uye paneli</h2>
+	<?php echo "<strong style='margin:2px;'>Hosgeldiniz:</strong> ".$_SESSION["uye"];?>
+	<ul> 
+	<?php
+     if($_SESSION["durum"] == 1){
+		
+echo '<li><a href="admin.php">Admin paneli</a></li>';		
+		 
+	 }
+
+	?>
+	
+	<li><a href="?islem=konu_ekle">Konu ekle</a></li>
+	<li><a href="cikis.php">Cikis yap</a></li>
+	</ul>
+	</div>
+		<?php
+	}else{
+	// uyelik sistemi
+	?>
+	<div class="uyelik">
+	<h2>Uye girisi</h2>
+	<?php include("uye.php");?>
+	<form action="" method="post">
+	<table> 
+	<tr> 
+	<td>Uye adi</td>
+	<td><input type="text" name="isim" /></td>
+	</tr>
+	<tr> 
+	<td>Sifre</td>
+	<td><input type="password" name="sifre" /></td>
+	</tr>
+	<tr> 
+	<td></td>
+	<td><button type="submit">giris yap</button></td>
+	</tr>
+	<tr>
+	<td>Hemen</td>
+	<td><a href="kayit.php">Kaydol</a></td>
+	</tr>
+	</table>
+	</form>
+	</div>
+	
+	<?php
+	}
+	// uyelik sistemi bitis
+	
+	// kategoriler
+	
+	$v = $db->prepare("select * from kategoriler");
+	
+	$v->execute(array());
+	$c = $v->fetchAll(PDO::FETCH_ASSOC);
+	$x = $v->rowCount();
+	
+	?>
+
+	<div class="kategori">
+   <h2>Kategoriler</h2>
+    <ul> 
+	<?php
+	
+	if($x){
+		
+		foreach($c as $m){
+			
+			echo '<li><a href="?islem=kategori&id='.$m["kategori_id"].'">'.$m["kategori_adi"].'</a></li>';
+					
+		}
+				
+	}else {
+		
+		echo "hic kategori bulunmuyor";		
+	}
+	
+	?>
+	</ul>
+	</div>
+	
+	<?php
+	
+	// kategoriler bitis
+	
+// populer konular
+ 
+    $pop = $db->prepare("select * from konular where konu_tarih >= date_sub(curdate(),interval 100 day) and konu_durum=1 order by konu_hit desc limit 5");
+     $pop->execute(array());
+	 $v = $pop->fetchAll(PDO::FETCH_ASSOC);
+     echo "<div class='pop'>
+	 
+	 <h2>Populer Konular</h2>
+	 ";
+	 foreach($v as $x){
+		 ?>
+		 <div class="populer">
+		 <a href="index.php?islem=devam&id=<?php echo $x["konu_id"];?>"><?php echo substr($x["konu_baslik"],0,60);?></a>
+		 </div>
+		 <?php
+	 }
+	 echo "</div>";
+// populer konular bitis
+
+// son yorumlar
+ 
+    $pop = $db->prepare("select * from yorumlar inner join konular on konular.konu_id = yorumlar.yorum_konu_id where konu_durum=1 order by yorum_id desc limit 5");
+     $pop->execute(array());
+	 $v = $pop->fetchAll(PDO::FETCH_ASSOC);
+     echo "<div class='pop2'>
+	 
+	 <h2>Son Yorumlar</h2>
+	 ";
+	 foreach($v as $x){
+		 ?>
+		 <div class="populer">
+		 <a href="index.php?islem=devam&id=<?php echo $x["yorum_konu_id"];?>"><?php echo substr($x["yorum_mesaj"],0,100);?></a>
+		 </div>
+		 <?php
+	 }
+	 echo "</div>";
+// son yorumlar bitis
+ 
+   // sayfalama
+   $sayfa = intval(@$_GET["sayfa"]);
+   if(!$sayfa){
+	   $sayfa = 1;
+   }
+   $v = $db->prepare("select * from konular inner join kategoriler on kategoriler.kategori_id = konular.konu_kategori where konu_durum=1");
+   $v->execute(array());
+   $toplam = $v->rowCount();
+   $limit = 3;
+   $goster = $sayfa*$limit-$limit; 
+   $sayfa_sayisi = ceil($toplam/$limit);
+   $forlimit = 2;
+   
+   // sayfalama bitis
+	$v = $db->query("select * from konular 
+	
+	inner join kategoriler on kategoriler.kategori_id = konular.konu_kategori where konu_durum=1
+	
+	order by konu_id desc limit $goster,$limit");
+	
+	$v->execute(array());
+	$x = $v->fetchAll(PDO::FETCH_ASSOC);
+	
+	foreach($x as $m){
+		
+		// konuya ait yorum sayısını bul
+		
+		$v = $db->prepare("select * from yorumlar where yorum_konu_id=?");
+		$v->execute(array($m["konu_id"]));
+		$zban = $v->rowCount();					
+		
+		?>
+			
+	    <div class="konu">
+		<h3><?php echo $m["konu_baslik"];?></h3>
+		<h4>Kategori : <?php echo $m["kategori_adi"];?></h4>
+		<h5>Ekleyen : <?php echo $m["konu_ekleyen"];?> Yorum : (<?php echo $zban;?>) Goruntulenme : <?php echo $m["konu_hit"];?><span>Tarih : <?php echo $m["konu_tarih"];?></span></h5>
+		<p><?php echo substr($m["konu_aciklama"],0,200);?>....</p>
+		<div class="x"><a href="index.php?islem=devam&id=<?php echo $m["konu_id"];?>">devamı...</a></div>
+	    </div>
+		<?php		
+	}	
+	// sayfalam linkleri
+	echo "<div style='position:fixed;bottom:14px;right:25px;'>";
+	for($i = $sayfa - $forlimit; $i<$sayfa + $forlimit +1; $i++){
+		
+		if($i>0 && $i<= $sayfa_sayisi){
+			
+			if($i == $sayfa){
+				echo "<span class='aktif'>".$i."</span>";
+			}else{
+				
+				echo "<span class='sayfa'><a href='index.php?sayfa=".$i."'>".$i."</a></span>";
+			}
+		}
+	}
+	if($sayfa != $sayfa_sayisi){
+	echo "<span class='sayfa'><a href='index.php?sayfa=".$sayfa_sayisi."'>son</a></span>";
+	}
+	break;
+	
+	echo "</div>";
+}
+
+?>
+	
